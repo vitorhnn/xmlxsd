@@ -22,6 +22,6 @@ public class HackyRPC implements RPCInterface {
             return historicoEscolar;
         }
 
-        throw new IllegalArgumentException();
+        return null;
     }
 }

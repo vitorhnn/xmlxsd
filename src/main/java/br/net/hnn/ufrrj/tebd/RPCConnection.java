@@ -1,6 +1,7 @@
 package br.net.hnn.ufrrj.tebd;
 
 import br.net.hnn.ufrrj.tebd.gerado.historicoescolar.HistoricoEscolar;
+import br.net.hnn.ufrrj.tebd.gerado.pedido.ArgumentoType;
 import br.net.hnn.ufrrj.tebd.gerado.pedido.Pedido;
 
 import javax.xml.XMLConstants;
@@ -13,8 +14,12 @@ import javax.xml.validation.SchemaFactory;
 import java.io.File;
 import java.io.FilterInputStream;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class RPCConnection implements Runnable {
     private Socket sock;
@@ -39,6 +44,24 @@ public class RPCConnection implements Runnable {
         throw new NoSuchMethodException();
     }
 
+    private Object[] convertArguments(List<ArgumentoType> xmlArgs, Parameter[] parameters) {
+        ArrayList<Object> args = new ArrayList<>(xmlArgs.size());
+        try {
+            for (ArgumentoType arg : xmlArgs) {
+                for (Parameter param : parameters) {
+                    if (arg.getNome().equals(param.getName())) {
+                        Class<?> paramType = param.getType();
+                        Constructor<?> constructor = paramType.getConstructor(String.class);
+                        args.add(constructor.newInstance(arg.getValor()));
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+        }
+
+        return args.toArray();
+    }
+
     @Override
     public void run() {
         try (Socket s = sock) {
@@ -49,7 +72,10 @@ public class RPCConnection implements Runnable {
             Pedido pedido = (Pedido) unmarshaller.unmarshal(new IgnoresCloseInputStream(s.getInputStream()));
 
             Method method = findMethod(pedido.getMetodo());
-            Object result = method.invoke(rpcInterface, "2016780485");
+            Object[] args = convertArguments(pedido.getArgumentos().getArgumento(), method.getParameters());
+
+            Object result = method.invoke(rpcInterface, args);
+
             Marshaller marshaller = context.createMarshaller();
             marshaller.marshal(result, s.getOutputStream());
         } catch (Exception e) {
